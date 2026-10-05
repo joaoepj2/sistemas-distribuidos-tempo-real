@@ -1,7 +1,7 @@
 # Disciplina de Sistemas Distribuídos e de Tempo Real
 
 
-## [Processos](/processos.md)
+## [Processos](./processos.md)
 
 ## Comunicação entre Processos
 * RPC (mais tarde)
