@@ -1,17 +1,43 @@
-# Welcome to MkDocs
+# Disciplina de Sistemas Distribuídos e de Tempo Real
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
 
-## Commands
+## Processos
+* Processo vs Programa
+* Bloco de Controle de Processo (PCB)
+* Estados
+* Filas
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
+## Comunicação entre Processos
+* RPC (mais tarde)
+* Memória compartilhada
+* Pipes
+* Sockets
 
-## Project layout
+## Concorrência
+* Condições de corrida
+* Exclusão mútua
+* Semáforos
 
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+## Fundamentos de Sistemas Distribuídos
+* Transparência
+
+## Projeto de Sistemas Distribuídos
+* Modelo Cliente-Servidor
+* RPC
+* Nomeação (DNS)
+* Diretórios (LDAP)
+
+## Coordenação e consistência
+* Relógios lógicos
+* Replicação
+* Consenso
+
+## Sistemas de Tempo Real
+* Soft vs Hard
+* Escalonamento
+
+## Desempenho e escalabilidade
+* Threads
+* Disponibilidade
+* Escalabilidade
+* Abertura
