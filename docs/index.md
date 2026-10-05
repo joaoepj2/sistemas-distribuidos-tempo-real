@@ -1,11 +1,7 @@
 # Disciplina de Sistemas Distribuídos e de Tempo Real
 
 
-## Processos
-* Processo vs Programa
-* Bloco de Controle de Processo (PCB)
-* Estados
-* Filas
+[##Processos](/processos)
 
 ## Comunicação entre Processos
 * RPC (mais tarde)
