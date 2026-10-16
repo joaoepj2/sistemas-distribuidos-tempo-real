@@ -1,22 +1,22 @@
 # Demonstração — 15 minutos
 
-| Tempo | Ação | Evidência |
+Prepare antes os IPs fixos, os `.env`, as imagens e a transferência da zona.
+Use o [tutorial em máquinas distintas](README.md) ou o [laboratório local](laboratorio-local.md).
+
+| Tempo | Ação | Resultado esperado |
 | --- | --- | --- |
-| 0–2 min | Explicar DNS, zona, primário e secundário | Diagrama com duas VMs na mesma LAN |
-| 2–4 min | Mostrar hostname, IP e `docker compose ps -a` nos dois nós | Um BIND por VM; configurador já finalizado |
-| 4–7 min | Executar `docker compose run --rm --no-deps cliente sh /testes/verificar.sh normal` | Registros corretos e SOA igual |
-| 7–9 min | Mostrar logs e pedir a um colega consulta ao IP de cada nó | Respostas autoritativas e transferência |
-| 9–12 min | Desligar a VM primária; no secundário executar o teste `falha` | Primário indisponível; secundário responde |
-| 12–14 min | Religar primário e repetir `normal` | Recuperação com ambos disponíveis |
-| 14–15 min | Explicar limite de expiração e limpar se apropriado | `docker compose down` em cada nó |
+| 0–3 min | Apresentar a topologia; iniciar e mostrar `ps -a` | Um BIND por nó, ou dois no modo local; configuradores finalizados |
+| 3–10 min | Consultar os registros, comparar SOA e logs; executar `normal` | Respostas previstas e transferência TSIG; colega consulta pela LAN no modo entre máquinas |
+| 10–15 min | Parar o primário; executar `falha`; recriar o secundário preservando volumes; recuperar e repetir `normal` | Secundário responde durante a falha; ambos respondem após recuperação |
 
-Antes da aula, baixe as imagens, configure os dois `.env`, reserve os IPs e
-valide firewall e transferência. Tenha acesso ao hipervisor para desligar e
-religar somente a VM do laboratório. Recursão externa requer Internet, mas a
-zona local não. Não interrompa serviços de colegas.
+No modo entre máquinas, desligue somente a VM primária pelo hipervisor e use
+os comandos da seção 7 do tutorial. No modo local, use os comandos de falha do
+guia local: eles param apenas `dns-primario` e recriam `dns-secundario`.
 
-Plano B: se o hipervisor estiver indisponível, pare apenas `dns` no primário
-com `docker compose stop dns` e repita o teste de falha a partir do secundário.
-Restaure com `docker compose up -d --wait`. Declare que isso comprova falha do
-serviço, e não desligamento da VM. Se a rede falhar, use evidências registradas
-em `validacao.md`, identificando claramente que não são execução ao vivo.
+Plano B: com as VMs ligadas, `docker compose stop dns` no primário demonstra
+falha de serviço. Recupere com `docker compose up -d --wait`. Tenha as imagens
+baixadas e uma gravação preparada para falha de rede durante a apresentação.
+
+Feche relacionando replicação de zona e disponibilidade: o secundário mantém
+uma cópia até a expiração do SOA; trocar de DNS automaticamente depende do
+resolvedor. Encerre e limpe conforme o guia escolhido.

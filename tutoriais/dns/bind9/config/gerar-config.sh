@@ -18,7 +18,7 @@ prefixo=${DNS_CLIENT_CIDR##*/}
 case "$prefixo" in ''|*[!0-9]*) erro 'Prefixo CIDR invalido' ;; esac
 [ "$prefixo" -ge 0 ] && [ "$prefixo" -le 32 ] || erro 'Prefixo CIDR fora de 0..32'
 if [ "$BIND_ROLE" = primario ]; then local_ip=$DNS_PRIMARY_IP; else local_ip=$DNS_SECONDARY_IP; fi
-[ "$DNS_BIND_ADDRESS" = "$local_ip" ] || erro 'DNS_BIND_ADDRESS deve ser o IP LAN do papel escolhido'
+[ "$DNS_BIND_ADDRESS" = "$local_ip" ] || erro 'DNS_BIND_ADDRESS deve ser o IP do papel escolhido'
 mkdir -p /generated/shared /generated/zones
 render() {
     sed -e "s|@DNS_PRIMARY_IP@|$DNS_PRIMARY_IP|g" \
