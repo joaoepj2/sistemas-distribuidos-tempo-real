@@ -8,7 +8,7 @@ Tutorial da disciplina de Sistemas Distribuídos e de Tempo Real. Reserva do tem
 | **Problema distribuído** | Cache e dados em memória replicados, com troca automática de primário quando ele cai |
 | **Nós** | 1 primário, 2 réplicas, 3 Sentinels (6 contêineres) |
 | **Tempo de demonstração** | 15 minutos ([roteiro-demo.md](roteiro-demo.md)) |
-| **Testado em** | 10/11/2026: replicação e failover validados com Redis 7.0 (resultados da seção 7). Execução em Docker Desktop pendente de revisão cruzada |
+| **Testado em** | 10/11/2026, Docker Desktop 4.99 no macOS (Intel): 6 contêineres saudáveis e failover verificado (seção 7) |
 | **Autora** | Rivane Martins Gimenez ([@rivanemartins-gif](https://github.com/rivanemartins-gif)) |
 
 ---
@@ -310,17 +310,19 @@ Terminal 2:
 docker compose stop redis-primario
 ```
 
-Resultado obtido no teste (10/11/2026):
+Resultado obtido no teste (10/11/2026, Docker Desktop no macOS):
 
 ```
-17:52:46  primário=redis-primario  contador=3
-17:52:47  primário=redis-primario  contador=4
-17:52:49  primário=redis-primario  ERRO: Error: Server closed the connection
-17:52:50  primário=redis-primario  ERRO: Could not connect to Redis at redis-primario:6379
-   ... (cerca de 6 segundos de erro)
-17:52:56  primário=redis-replica2  contador=5
-17:52:57  primário=redis-replica2  contador=6
+21:20:39  primário=redis-primario  contador=8
+21:20:40  primário=redis-primario  contador=9
+21:20:42  primário=redis-primario  ERRO: Error: Server closed the connection
+21:20:43  primário=redis-primario  ERRO: Could not connect to Redis at redis-primario:6379: Name has no usable address
+   ... (6 segundos de erro, até 21:20:47)
+21:20:48  primário=redis-replica1  contador=10
+21:20:49  primário=redis-replica1  contador=11
 ```
+
+A réplica promovida pode ser `redis-replica1` ou `redis-replica2`: o Sentinel escolhe a que estiver mais atualizada, e no empate a escolha varia a cada execução.
 
 O que aconteceu, segundo os logs dos Sentinels (`docker compose logs sentinel1 sentinel2 sentinel3`):
 
@@ -328,12 +330,12 @@ O que aconteceu, segundo os logs dos Sentinels (`docker compose logs sentinel1 s
 +sdown master mymaster redis-primario 6379            ← um Sentinel suspeita (5 s sem resposta)
 +odown master mymaster redis-primario 6379 #quorum 2/2 ← 2 Sentinels concordam
 +elected-leader master mymaster ...                    ← um Sentinel é eleito para conduzir
-+selected-slave slave redis-replica2:6379 ...          ← escolhe a réplica a promover
-+switch-master mymaster redis-primario 6379 redis-replica2 6379  ← novo primário
++selected-slave slave redis-replica1:6379 ...          ← escolhe a réplica a promover
++switch-master mymaster redis-primario 6379 redis-replica1 6379  ← novo primário
 ```
 
 **Leituras importantes:**
-- O contador continuou do 5. **Nenhuma escrita confirmada foi perdida**, porque as réplicas estavam em dia.
+- O contador continuou do 10, logo depois do 9. **Nenhuma escrita confirmada foi perdida**, porque as réplicas estavam em dia.
 - O sistema ficou **cerca de 7 segundos sem aceitar escritas**: os 5 segundos de `down-after-milliseconds` mais o tempo da votação. Esse é o preço da disponibilidade automática.
 - O cliente não precisou ser alterado: ele perguntou ao Sentinel e passou a escrever no novo primário.
 
@@ -353,7 +355,7 @@ t=10s  papel do antigo primário: master
 t=12s  papel do antigo primário: slave     ← o Sentinel o rebaixou a réplica
 ```
 
-Log do Sentinel: `+convert-to-slave slave redis-primario:6379 ... @ mymaster redis-replica2 6379`.
+Log do Sentinel: `+convert-to-slave slave redis-primario:6379 ... @ mymaster <novo primário> 6379`.
 
 **Este é o ponto mais interessante para a turma.** Por cerca de 10 segundos existiram **dois nós se dizendo primário**, situação conhecida como *split-brain*. Um cliente que escrevesse direto no `redis-primario` (porta 6380), sem perguntar ao Sentinel, gravaria num nó desatualizado, e essa escrita seria **apagada** quando ele virasse réplica. Por isso a aplicação deve sempre descobrir o primário pelo Sentinel.
 
