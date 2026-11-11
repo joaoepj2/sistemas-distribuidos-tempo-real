@@ -20,9 +20,10 @@
 | [Pedroaugusto2003](https://github.com/Pedroaugusto2003) | ✅ |
 | [raco1](https://github.com/raco1) | ✅ |
 | [rafaelh4mu](https://github.com/rafaelh4mu) | ✅ |
+| [rivanemartins-gif](https://github.com/rivanemartins-gif) | ✅ |
 | [YanLopesFA](https://github.com/YanLopesFA) | ✅ |
 
-✅ = tarefa concluída. 17 de 37 alunos já registraram o usuário em `lista-usuarios.txt` (20 ainda não).
+✅ = tarefa concluída. 18 de 37 alunos já registraram o usuário em `lista-usuarios.txt` (19 ainda não).
 
 ## Tarefas
 
