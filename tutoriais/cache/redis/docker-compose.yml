@@ -1,0 +1,144 @@
+# Redis com replicação e failover automático via Sentinel
+# 1 primário + 2 réplicas + 3 Sentinels, todos na rede "sdtr-redis".
+#
+# Subir:      cp .env.example .env && docker compose up -d
+# Ver estado: docker compose ps
+# Zerar tudo: docker compose down -v
+#
+# Testado em 10/11/2026 (configuração validada com Redis 7.x).
+
+name: sdtr-redis
+
+# Configuração comum aos 3 nós Redis (âncora YAML reaproveitada abaixo)
+x-redis-node: &redis-node
+  image: ${REDIS_IMAGE}
+  restart: unless-stopped
+  networks: [sdtr-redis]
+  healthcheck:
+    test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+  environment:
+    REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+# Configuração comum aos 3 Sentinels
+x-sentinel: &sentinel
+  image: ${REDIS_IMAGE}
+  restart: unless-stopped
+  networks: [sdtr-redis]
+  entrypoint: ["sh", "/usr/local/bin/sentinel-entrypoint.sh"]
+  depends_on:
+    redis-primario:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "redis-cli -p 26379 ping | grep -q PONG"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+
+services:
+  # ---------------------------------------------------------------- nós Redis
+  redis-primario:
+    <<: *redis-node
+    container_name: redis-primario
+    hostname: redis-primario
+    # --requirepass  : senha para clientes
+    # --masterauth   : senha usada quando ESTE nó virar réplica (após um failover)
+    # --appendonly   : grava cada escrita em disco (AOF) para sobreviver a reinícios
+    # --replica-announce-ip : se anuncia pelo nome, não pelo IP (IPs mudam ao reiniciar)
+    command: >
+      redis-server --port 6379
+      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+      --appendonly yes
+      --replica-announce-ip redis-primario
+    ports: ["6380:6379"]
+    volumes: [dados-primario:/data]
+
+  redis-replica1:
+    <<: *redis-node
+    container_name: redis-replica1
+    hostname: redis-replica1
+    # --replicaof : começa como cópia do primário (somente leitura)
+    command: >
+      redis-server --port 6379
+      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+      --appendonly yes
+      --replica-announce-ip redis-replica1
+      --replicaof redis-primario 6379
+    ports: ["6381:6379"]
+    volumes: [dados-replica1:/data]
+    depends_on:
+      redis-primario: { condition: service_healthy }
+
+  redis-replica2:
+    <<: *redis-node
+    container_name: redis-replica2
+    hostname: redis-replica2
+    command: >
+      redis-server --port 6379
+      --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
+      --appendonly yes
+      --replica-announce-ip redis-replica2
+      --replicaof redis-primario 6379
+    ports: ["6382:6379"]
+    volumes: [dados-replica2:/data]
+    depends_on:
+      redis-primario: { condition: service_healthy }
+
+  # ---------------------------------------------------------------- Sentinels
+  # Três Sentinels para haver maioria (quórum 2 de 3) mesmo com um fora do ar.
+  sentinel1:
+    <<: *sentinel
+    container_name: sentinel1
+    hostname: sentinel1
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SENTINEL_MASTER_NAME: ${SENTINEL_MASTER_NAME}
+      SENTINEL_HOSTNAME: sentinel1
+    ports: ["26380:26379"]
+    volumes:
+      - ./sentinel/sentinel.conf.template:/etc/redis/sentinel.conf.template:ro
+      - ./sentinel/entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
+      - ./demo:/demo:ro                 # scripts da demonstração
+      - dados-sentinel1:/data
+
+  sentinel2:
+    <<: *sentinel
+    container_name: sentinel2
+    hostname: sentinel2
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SENTINEL_MASTER_NAME: ${SENTINEL_MASTER_NAME}
+      SENTINEL_HOSTNAME: sentinel2
+    ports: ["26381:26379"]
+    volumes:
+      - ./sentinel/sentinel.conf.template:/etc/redis/sentinel.conf.template:ro
+      - ./sentinel/entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
+      - dados-sentinel2:/data
+
+  sentinel3:
+    <<: *sentinel
+    container_name: sentinel3
+    hostname: sentinel3
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SENTINEL_MASTER_NAME: ${SENTINEL_MASTER_NAME}
+      SENTINEL_HOSTNAME: sentinel3
+    ports: ["26382:26379"]
+    volumes:
+      - ./sentinel/sentinel.conf.template:/etc/redis/sentinel.conf.template:ro
+      - ./sentinel/entrypoint.sh:/usr/local/bin/sentinel-entrypoint.sh:ro
+      - dados-sentinel3:/data
+
+networks:
+  sdtr-redis:
+    name: sdtr-redis
+
+volumes:
+  dados-primario:
+  dados-replica1:
+  dados-replica2:
+  dados-sentinel1:
+  dados-sentinel2:
+  dados-sentinel3:

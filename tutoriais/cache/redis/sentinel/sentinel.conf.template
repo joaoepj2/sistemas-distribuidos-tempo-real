@@ -1,0 +1,33 @@
+# Modelo de configuração do Redis Sentinel.
+# O script entrypoint.sh copia este arquivo para /data/sentinel.conf
+# (só na primeira subida) e troca os marcadores __...__ pelos valores do .env.
+# O Sentinel PRECISA de um arquivo gravável: ele reescreve este arquivo
+# sozinho depois de cada failover, guardando quem é o primário atual.
+
+port 26379
+
+# Permite usar nomes de contêiner (redis-primario) em vez de IPs.
+# Sem isso o Sentinel só aceita endereços IP.
+sentinel resolve-hostnames yes
+sentinel announce-hostnames yes
+
+# Cada Sentinel se anuncia aos outros pelo próprio nome de contêiner.
+sentinel announce-ip __SENTINEL_HOSTNAME__
+
+# monitor <nome> <host> <porta> <quórum>
+# quórum 2 = pelo menos 2 dos 3 Sentinels precisam concordar que o
+# primário caiu antes de iniciar o failover.
+sentinel monitor __MASTER_NAME__ redis-primario 6379 2
+
+# Senha para falar com os nós Redis.
+sentinel auth-pass __MASTER_NAME__ __REDIS_PASSWORD__
+
+# Quanto tempo sem resposta até um Sentinel achar que o primário caiu.
+# 5 s deixa a demonstração rápida. Em produção, 30 s é mais comum.
+sentinel down-after-milliseconds __MASTER_NAME__ 5000
+
+# Tempo máximo de um failover antes de tentar de novo.
+sentinel failover-timeout __MASTER_NAME__ 15000
+
+# Quantas réplicas passam a copiar o novo primário ao mesmo tempo.
+sentinel parallel-syncs __MASTER_NAME__ 1
