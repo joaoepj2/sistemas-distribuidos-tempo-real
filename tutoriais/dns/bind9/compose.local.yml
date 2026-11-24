@@ -1,0 +1,115 @@
+# Opcao para um computador. Execute este arquivo sozinho, sem mesclar com o da LAN.
+# A comunicacao entre BIND usa IPs internos e porta 53; o host usa localhost:1053/2053.
+x-ferramentas: &ferramentas
+  image: nicolaka/netshoot:v0.14@sha256:7f08c4aff13ff61a35d30e30c5c1ea8396eac6ab4ce19fd02d5a4b3b5d0d09a2
+  entrypoint: []
+  mem_limit: 128m
+
+x-rede-dns: &rede-dns
+  DNS_PRIMARY_IP: ${LOCAL_DNS_PRIMARY_IP:-172.30.53.10}
+  DNS_SECONDARY_IP: ${LOCAL_DNS_SECONDARY_IP:-172.30.53.11}
+  DNS_CLIENT_CIDR: ${LOCAL_DNS_SUBNET:-172.30.53.0/24}
+  DNS_PORT: "53"
+
+x-configurador: &configurador
+  <<: *ferramentas
+  command: [sh, /templates/gerar-config.sh]
+  network_mode: none
+
+x-bind: &bind
+  image: ubuntu/bind9:9.20-26.04_stable@sha256:f1a2a62ba28272eccb9efab3ebd2ba910e70edd93dd3c51dd130ba349aa13175
+  entrypoint: [/usr/sbin/named]
+  command: [-g, -n, "2", -c, /etc/bind/named.conf]
+  user: "0:0"
+  mem_limit: 192m
+  restart: unless-stopped
+  healthcheck:
+    test: [CMD, rndc, -c, /etc/bind/shared/rndc.conf, status]
+    interval: 5s
+    timeout: 3s
+    retries: 12
+    start_period: 10s
+
+services:
+  configurador-primario:
+    <<: *configurador
+    environment:
+      <<: *rede-dns
+      BIND_ROLE: primario
+      DNS_BIND_ADDRESS: ${LOCAL_DNS_PRIMARY_IP:-172.30.53.10}
+    volumes:
+      - ./config:/templates:ro
+      - ./zones:/zonas:ro
+      - configuracao-primario:/generated
+
+  configurador-secundario:
+    <<: *configurador
+    environment:
+      <<: *rede-dns
+      BIND_ROLE: secundario
+      DNS_BIND_ADDRESS: ${LOCAL_DNS_SECONDARY_IP:-172.30.53.11}
+    volumes:
+      - ./config:/templates:ro
+      # O secundario recebe a zona pela rede, sem montar ./zones.
+      - configuracao-secundario:/generated
+
+  dns-primario:
+    <<: *bind
+    depends_on:
+      configurador-primario:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${LOCAL_DNS_PRIMARY_PORT:-1053}:53/udp"
+      - "127.0.0.1:${LOCAL_DNS_PRIMARY_PORT:-1053}:53/tcp"
+    volumes:
+      - configuracao-primario:/etc/bind:ro
+      - cache-primario:/var/cache/bind
+      - dados-primario:/var/lib/bind
+    networks:
+      laboratorio:
+        ipv4_address: ${LOCAL_DNS_PRIMARY_IP:-172.30.53.10}
+
+  dns-secundario:
+    <<: *bind
+    # Nao depende do primario: deve poder reiniciar durante sua indisponibilidade.
+    depends_on:
+      configurador-secundario:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${LOCAL_DNS_SECONDARY_PORT:-2053}:53/udp"
+      - "127.0.0.1:${LOCAL_DNS_SECONDARY_PORT:-2053}:53/tcp"
+    volumes:
+      - configuracao-secundario:/etc/bind:ro
+      - cache-secundario:/var/cache/bind
+      - dados-secundario:/var/lib/bind
+    networks:
+      laboratorio:
+        ipv4_address: ${LOCAL_DNS_SECONDARY_IP:-172.30.53.11}
+
+  cliente:
+    <<: *ferramentas
+    profiles: [ferramentas]
+    command: [sh, /testes/verificar.sh, normal]
+    environment: *rede-dns
+    # Tambem permite testar o resolvedor padrao, sem escolher um servidor no dig.
+    dns:
+      - ${LOCAL_DNS_PRIMARY_IP:-172.30.53.10}
+      - ${LOCAL_DNS_SECONDARY_IP:-172.30.53.11}
+    volumes:
+      - ./testes:/testes:ro
+    networks:
+      - laboratorio
+
+networks:
+  laboratorio:
+    ipam:
+      config:
+        - subnet: ${LOCAL_DNS_SUBNET:-172.30.53.0/24}
+
+volumes:
+  configuracao-primario:
+  cache-primario:
+  dados-primario:
+  configuracao-secundario:
+  cache-secundario:
+  dados-secundario:

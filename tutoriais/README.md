@@ -1,12 +1,8 @@
 # Tutoriais da turma
 
-Os tutoriais concluídos serão organizados em `<tema>/<software>/`, cada qual
-com README, `docker-compose.yml`, `.env.example`, `roteiro-demo.md` e `imagens/`.
+Organização: `<tema>/<software>/`. Para novas contribuições, siga as
+[diretrizes da disciplina](../README.md#diretrizes-para-tutoriais-de-middleware-em-sistemas-distribuídos).
 
-| Tema | Software | Proposta | Estado |
-| --- | --- | --- | --- |
-| DNS | [BIND 9](dns/bind9/README.md) | Um primário e um secundário em nós distintos; consultas e falha do primário; [issue #2](https://github.com/joaoepj2/sistemas-distribuidos-tempo-real/issues/2) | Compose, roteiro e [procedimento de verificação](dns/bind9/validacao.md) disponíveis |
-
-Para começar outro tutorial, adapte o [modelo](../templates/tutorial/README.md)
-conforme as diretrizes do [README principal](../README.md). Adicione aqui o link
-do tutorial quando houver uma contribuição revisável.
+| Tema | Tutorial | Execução |
+| --- | --- | --- |
+| DNS | [BIND 9](dns/bind9/README.md) — [issue #2](https://github.com/joaoepj2/sistemas-distribuidos-tempo-real/issues/2) | [Duas máquinas](dns/bind9/README.md) ou [um computador](dns/bind9/laboratorio-local.md) |

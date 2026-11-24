@@ -1,0 +1,13 @@
+{
+  "lista": "lista-usuarios.txt",
+  "saida": "avaliacao.md",
+  "tarefas": [
+    {
+      "id": "tarefa-1",
+      "titulo": "Tarefa 1",
+      "descricao": "Criar conta no GitHub, fazer fork do repositório, escrever o usuário na frente do seu número em `lista-usuarios.txt` e abrir um PR.",
+      "pontos": null,
+      "verificacoes": ["conta", "fork", "pr"]
+    }
+  ]
+}

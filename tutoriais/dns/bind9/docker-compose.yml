@@ -1,15 +1,15 @@
-# Um único BIND por máquina. Copie .env.example e configure os IPs da LAN.
+# Um único BIND por máquina. Copie o .env.example da raiz para .env nesta pasta.
 x-ferramentas: &ferramentas
   image: nicolaka/netshoot:v0.14@sha256:7f08c4aff13ff61a35d30e30c5c1ea8396eac6ab4ce19fd02d5a4b3b5d0d09a2
   entrypoint: []
   mem_limit: 128m
 
 x-ambiente: &ambiente
-  BIND_ROLE: ${BIND_ROLE:?Defina BIND_ROLE como primario ou secundario no .env}
-  DNS_PRIMARY_IP: ${DNS_PRIMARY_IP:?Informe o IP LAN do node-1}
-  DNS_SECONDARY_IP: ${DNS_SECONDARY_IP:?Informe o IP LAN do node-2}
-  DNS_BIND_ADDRESS: ${DNS_BIND_ADDRESS:?Informe o IP LAN desta VM}
-  DNS_CLIENT_CIDR: ${DNS_CLIENT_CIDR:?Informe a rede dos clientes em CIDR}
+  BIND_ROLE: ${BIND_ROLE:?Copie o .env.example da raiz para .env e defina BIND_ROLE como primario ou secundario}
+  DNS_PRIMARY_IP: ${DNS_PRIMARY_IP:?Preencha DNS_PRIMARY_IP no .env com o IP LAN real do no primario}
+  DNS_SECONDARY_IP: ${DNS_SECONDARY_IP:?Preencha DNS_SECONDARY_IP no .env com o IP LAN real do no secundario}
+  DNS_BIND_ADDRESS: ${DNS_BIND_ADDRESS:?Preencha DNS_BIND_ADDRESS no .env com o IP LAN pertencente a esta maquina}
+  DNS_CLIENT_CIDR: ${DNS_CLIENT_CIDR:?Preencha DNS_CLIENT_CIDR no .env com a rede dos clientes em CIDR}
   DNS_PORT: ${DNS_PORT:-53}
 
 services:
@@ -35,8 +35,8 @@ services:
       configurador:
         condition: service_completed_successfully
     ports:
-      - "${DNS_BIND_ADDRESS}:${DNS_PORT:-53}:53/udp"
-      - "${DNS_BIND_ADDRESS}:${DNS_PORT:-53}:53/tcp"
+      - "${DNS_BIND_ADDRESS:?Preencha DNS_BIND_ADDRESS no .env com o IP LAN pertencente a esta maquina}:${DNS_PORT:-53}:53/udp"
+      - "${DNS_BIND_ADDRESS:?Preencha DNS_BIND_ADDRESS no .env com o IP LAN pertencente a esta maquina}:${DNS_PORT:-53}:53/tcp"
     volumes:
       - configuracao:/etc/bind:ro
       - cache:/var/cache/bind

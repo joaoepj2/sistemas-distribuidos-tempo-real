@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
-: "${DNS_PRIMARY_IP:?Informe o IP LAN do primario}"
-: "${DNS_SECONDARY_IP:?Informe o IP LAN do secundario}"
+: "${DNS_PRIMARY_IP:?Informe o IP do primario na rede do laboratorio}"
+: "${DNS_SECONDARY_IP:?Informe o IP do secundario na rede do laboratorio}"
 DNS_PORT=${DNS_PORT:-53}
 falhar() { echo "FALHOU: $*" >&2; exit 1; }
 consultar() { dig +time=1 +tries=1 -p "$DNS_PORT" "$@"; }
@@ -30,12 +30,12 @@ case "${1:-normal}" in
         igual "$(consultar "@$DNS_SECONDARY_IP" ns2.lab.test A +short)" "$DNS_SECONDARY_IP" 'A do NS secundario'
         transferencia=$(consultar "@$DNS_PRIMARY_IP" lab.test AXFR 2>&1 || true)
         echo "$transferencia" | grep -Eq 'Transfer failed|REFUSED' || falhar 'AXFR sem chave nao foi recusado'
-        echo 'OK: replicacao pela LAN e recusa de AXFR sem chave'
+        echo 'OK: replicacao pela rede e recusa de AXFR sem chave'
         ;;
     falha)
         if consultar "@$DNS_PRIMARY_IP" app.lab.test A +short >/dev/null 2>&1; then falhar 'o primario ainda responde'; fi
         verificar_servidor "$DNS_SECONDARY_IP"
-        echo 'OK: secundario atende pela LAN com o no primario indisponivel'
+        echo 'OK: secundario atende pela rede com a instancia primaria indisponivel'
         ;;
     local)
         # Apenas teste isolado de uma instancia primaria, usado na CI.

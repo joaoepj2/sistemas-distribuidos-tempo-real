@@ -1,0 +1,3 @@
+{
+  "_como_usar": "Chave = usuário GitHub; valor = {id-da-tarefa: nota}. Exemplo: {\"fulano\": {\"tarefa-1\": 10}}. Chaves iniciadas por _ são ignoradas."
+}

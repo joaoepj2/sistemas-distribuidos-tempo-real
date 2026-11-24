@@ -1,0 +1,48 @@
+name: Avaliação
+
+# Recalcula o avaliacao.md (tabela de alunos × tarefas). Scripts e dados em .github/workflows/avaliacao/
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['avaliacao.md']
+  pull_request_target:            # só lê a API; nunca executa código vindo do PR
+    types: [opened, reopened, closed]
+  issues:
+    types: [opened, reopened, closed]
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: avaliacao
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: read
+
+jobs:
+  avaliar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Gerar avaliacao.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/workflows/avaliacao/avaliar.py
+
+      - name: Publicar se mudou
+        run: |
+          git add avaliacao.md
+          if git diff --cached --quiet; then
+            echo "avaliacao.md sem mudanças."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: atualiza avaliacao.md"
+          git push || { git pull --rebase && git push; }
