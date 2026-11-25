@@ -5,15 +5,33 @@
 # Ver estado: docker compose ps
 # Zerar tudo: docker compose down -v
 #
-# Testado em 10/11/2026 (configuração validada com Redis 7.x).
+# Testado em 10/11/2026 no macOS (versão sem IPs fixos) e em 25/11/2026 no
+# Windows (versão atual, com IPs fixos e tabela de nomes).
 
 name: sdtr-redis
+
+# Tabela de nomes fixa (vira o /etc/hosts de cada contêiner).
+# Por que existe: quando um contêiner é PARADO, o nome dele some do DNS do
+# Docker. No Docker Desktop do Windows a consulta por um nome inexistente
+# leva de 3 a 4 segundos para falhar (o DNS interno repassa a pergunta ao
+# resolvedor do host). O Sentinel e o Redis resolvem nomes de forma
+# BLOQUEANTE, numa única thread: cada consulta trava o processo inteiro.
+# Travado por mais de 2 s, o Sentinel entra em "modo TILT" e não faz failover.
+# Com esta tabela o nome é resolvido na hora, sem passar pelo DNS, em
+# qualquer sistema. Os IPs batem com os "ipv4_address" de cada serviço.
+x-nomes: &nomes
+  - "redis-primario:172.30.89.11"
+  - "redis-replica1:172.30.89.12"
+  - "redis-replica2:172.30.89.13"
+  - "sentinel1:172.30.89.21"
+  - "sentinel2:172.30.89.22"
+  - "sentinel3:172.30.89.23"
 
 # Configuração comum aos 3 nós Redis (âncora YAML reaproveitada abaixo)
 x-redis-node: &redis-node
   image: ${REDIS_IMAGE}
   restart: unless-stopped
-  networks: [sdtr-redis]
+  extra_hosts: *nomes
   healthcheck:
     test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
     interval: 5s
@@ -26,7 +44,7 @@ x-redis-node: &redis-node
 x-sentinel: &sentinel
   image: ${REDIS_IMAGE}
   restart: unless-stopped
-  networks: [sdtr-redis]
+  extra_hosts: *nomes
   entrypoint: ["sh", "/usr/local/bin/sentinel-entrypoint.sh"]
   depends_on:
     redis-primario:
@@ -43,6 +61,8 @@ services:
     <<: *redis-node
     container_name: redis-primario
     hostname: redis-primario
+    networks:
+      sdtr-redis: { ipv4_address: 172.30.89.11 }
     # --requirepass  : senha para clientes
     # --masterauth   : senha usada quando ESTE nó virar réplica (após um failover)
     # --appendonly   : grava cada escrita em disco (AOF) para sobreviver a reinícios
@@ -59,6 +79,8 @@ services:
     <<: *redis-node
     container_name: redis-replica1
     hostname: redis-replica1
+    networks:
+      sdtr-redis: { ipv4_address: 172.30.89.12 }
     # --replicaof : começa como cópia do primário (somente leitura)
     command: >
       redis-server --port 6379
@@ -75,6 +97,8 @@ services:
     <<: *redis-node
     container_name: redis-replica2
     hostname: redis-replica2
+    networks:
+      sdtr-redis: { ipv4_address: 172.30.89.13 }
     command: >
       redis-server --port 6379
       --requirepass ${REDIS_PASSWORD} --masterauth ${REDIS_PASSWORD}
@@ -92,6 +116,8 @@ services:
     <<: *sentinel
     container_name: sentinel1
     hostname: sentinel1
+    networks:
+      sdtr-redis: { ipv4_address: 172.30.89.21 }
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       SENTINEL_MASTER_NAME: ${SENTINEL_MASTER_NAME}
@@ -107,6 +133,8 @@ services:
     <<: *sentinel
     container_name: sentinel2
     hostname: sentinel2
+    networks:
+      sdtr-redis: { ipv4_address: 172.30.89.22 }
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       SENTINEL_MASTER_NAME: ${SENTINEL_MASTER_NAME}
@@ -121,6 +149,8 @@ services:
     <<: *sentinel
     container_name: sentinel3
     hostname: sentinel3
+    networks:
+      sdtr-redis: { ipv4_address: 172.30.89.23 }
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       SENTINEL_MASTER_NAME: ${SENTINEL_MASTER_NAME}
@@ -134,6 +164,12 @@ services:
 networks:
   sdtr-redis:
     name: sdtr-redis
+    # Faixa fixa, necessária para os IPs da tabela x-nomes.
+    # Se ela coincidir com a rede da sua casa ou da sala (raro), troque o
+    # "172.30.89" aqui, nos ipv4_address e na tabela x-nomes.
+    ipam:
+      config:
+        - subnet: 172.30.89.0/24
 
 volumes:
   dados-primario:
