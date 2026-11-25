@@ -57,7 +57,7 @@ Tutorial completo: [README.md](README.md)
 | 12:00 | Religar o antigo primário | **T1:** `docker compose start redis-primario` | |
 | 12:15 | "Ele volta achando que ainda é o chefe..." | **T1:** `docker compose exec redis-primario redis-cli -a sdtr-lab-2026 --no-auth-warning ROLE` | `master` nos primeiros cerca de 10 s |
 | 12:45 | "...e o Sentinel o rebaixa" | Repetir o `ROLE` | `slave` e o nome do novo primário. No T3: `+convert-to-slave` |
-| 13:30 | Explicar o *split-brain*: por cerca de 10 s havia dois "primários" | | |
+| 13:30 | Explicar o *split-brain*: por alguns segundos havia dois "primários" (cerca de 10 s no teste em macOS, menos de 2 s no Windows com a versão atual do Compose) | | |
 | 14:15 | **Fechamento** (frase abaixo) | `Ctrl+C` no T2 | |
 
 **Fechamento obrigatório (dizer em voz alta):**
