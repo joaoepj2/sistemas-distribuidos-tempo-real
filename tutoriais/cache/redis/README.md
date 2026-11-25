@@ -8,8 +8,9 @@ Tutorial da disciplina de Sistemas Distribuídos e de Tempo Real. Reserva do tem
 | **Problema distribuído** | Cache e dados em memória replicados, com troca automática de primário quando ele cai |
 | **Nós** | 1 primário, 2 réplicas, 3 Sentinels (6 contêineres) |
 | **Tempo de demonstração** | 15 minutos ([roteiro-demo.md](roteiro-demo.md)) |
-| **Testado em** | 10/11/2026, Docker Desktop 4.99 no macOS (Intel): 6 contêineres saudáveis e failover verificado (seção 7) |
+| **Testado em** | 10/11/2026, Docker Desktop 4.99 no macOS (Intel): 6 contêineres saudáveis e failover verificado, com a versão anterior do `docker-compose.yml` (sem IPs fixos)<br>25/11/2026, Docker Desktop 4.99 no Windows (Docker Engine 29.9.3, Compose v5.7.0): 6 contêineres saudáveis, failover verificado e limpeza conferida, com a versão atual (seção 7) |
 | **Autora** | Rivane Martins Gimenez ([@rivanemartins-gif](https://github.com/rivanemartins-gif)) |
+| **Teste no Windows e correção do failover** | Clécio Barbosa Filho ([@cleciobf](https://github.com/cleciobf)) |
 
 ---
 
@@ -102,6 +103,17 @@ Todas usam números altos, para não conflitar com um Redis que já exista na m�
 | sentinel1 | 26380 | 26379 | Sentinel |
 | sentinel2 | 26381 | 26379 | Sentinel |
 | sentinel3 | 26382 | 26379 | Sentinel |
+
+### O que muda no Windows
+
+Testado com Docker Desktop no Windows e os comandos rodando no PowerShell. Os comandos `docker compose` deste tutorial funcionam iguais. As diferenças encontradas:
+
+- **Docker Desktop aberto.** Antes do primeiro comando, espere aparecer "Engine running" no canto inferior esquerdo do Docker Desktop.
+- **`export` não existe no PowerShell.** O atalho da seção 4 vira `$env:REDISCLI_AUTH="sdtr-lab-2026"`. Ele só serve para quem tem o `redis-cli` instalado no próprio Windows; os comandos do tutorial rodam o `redis-cli` dentro dos contêineres e passam a senha com `-a`.
+- **Cole um comando por vez.** Colando um bloco com linhas de comentário, o PowerShell juntou o `docker compose ps` com o comentário seguinte e respondeu `unknown docker command: "compose ps#"`.
+- **IP do notebook:** `ipconfig`, no campo "Endereço IPv4".
+- **Horários em UTC.** O `contador.sh` e os logs mostram a hora dos contêineres, que estão em UTC: 22:37 na tela são 19:37 em Brasília.
+- **Acesso dos colegas pela rede (seção 6): ainda não testado no Windows.** Esse teste precisa de outro computador na mesma rede. Se o colega não conseguir conectar, verifique se o Firewall do Windows está bloqueando as portas 6380 a 6382.
 
 ---
 
@@ -228,6 +240,30 @@ sentinel parallel-syncs mymaster 1                # réplicas ressincronizando p
 - **`down-after-milliseconds`.** 5 segundos deixa a demonstração rápida. Em produção use cerca de 30 segundos, para que uma lentidão passageira não cause uma troca de primário desnecessária.
 - **Por que 3 Sentinels e não 1.** Um único Sentinel seria um novo ponto único de falha, e também não teria como saber se o problema está no primário ou na própria rede dele.
 
+### Rede com IPs fixos e tabela de nomes (`docker-compose.yml`)
+
+```yaml
+x-nomes: &nomes                       # vira o /etc/hosts de cada contêiner
+  - "redis-primario:172.30.89.11"
+  - "redis-replica1:172.30.89.12"
+  - "redis-replica2:172.30.89.13"
+  - "sentinel1:172.30.89.21"
+  - "sentinel2:172.30.89.22"
+  - "sentinel3:172.30.89.23"
+
+networks:
+  sdtr-redis:
+    ipam:
+      config:
+        - subnet: 172.30.89.0/24      # faixa fixa da rede do laboratório
+```
+
+Cada serviço recebe `extra_hosts: *nomes` e o seu `ipv4_address` da tabela.
+
+**Por que existe.** Quando um contêiner é parado, o nome dele some do DNS interno do Docker. O Sentinel e o Redis resolvem nomes de forma bloqueante, numa única thread: enquanto a consulta não volta, o processo inteiro fica parado. No teste em macOS a falha de resolução apareceu na hora. No Docker Desktop do Windows a mesma consulta levou de 3 a 4 segundos, e isso bastou para impedir o failover. O Sentinel que passa mais de 2 segundos sem rodar entra em **modo TILT** e suspende as decisões por 30 segundos, e cada nova consulta o travava de novo (seção 8). Com a tabela, os nomes são resolvidos pelo `/etc/hosts`, sem passar pelo DNS, e o comportamento é o mesmo em qualquer sistema.
+
+**O que mudar e por quê.** Se a faixa `172.30.89.0/24` coincidir com a rede da sua casa ou da sala, troque o `172.30.89` em três lugares: na tabela `x-nomes`, nos `ipv4_address` e no `subnet`.
+
 O `sentinel/entrypoint.sh` existe porque **o Sentinel exige um arquivo de configuração gravável**: ele reescreve o arquivo sozinho depois de cada failover, registrando o novo primário. O script copia o modelo para o volume `/data` **somente na primeira subida** e troca os marcadores pelos valores do `.env`.
 
 ---
@@ -330,6 +366,24 @@ A réplica promovida pode ser `redis-replica1` ou `redis-replica2`: o Sentinel e
 
 ![Failover: contador com 6 s de erro e redis-replica1 assumindo como primário](imagens/02-failover-contador.png)
 
+Resultado obtido no teste em Windows (25/11/2026, Docker Desktop, versão atual do Compose; horários em UTC):
+
+```
+22:37:31  primário=redis-primario  contador=21
+22:37:32  primário=redis-primario  contador=22
+22:37:33  primário=redis-primario  ERRO: Error: Server closed the connection
+Terminated
+22:37:36  primário=redis-primario  ERRO: sem resposta
+Terminated
+22:37:39  primário=redis-primario  ERRO: sem resposta
+22:37:40  primário=redis-replica2  contador=23
+22:37:41  primário=redis-replica2  contador=24
+```
+
+O mesmo comportamento do macOS: 7 segundos sem escrita e o contador seguindo do 22 para o 23. As linhas `Terminated` são o aviso do shell quando o `timeout 2` encerra um `redis-cli` que não respondeu, por isso durante a falha cada volta leva 3 segundos em vez de 1. Nos logs, os três Sentinels registraram `+switch-master mymaster redis-primario 6379 redis-replica2 6379` entre 22:37:39 e 22:37:40, sem nenhuma linha de `tilt`.
+
+![Failover no Windows: 7 s de erro e redis-replica2 assumindo como primário](imagens/06-windows-failover-corrigido.png)
+
 O que aconteceu, segundo os logs dos Sentinels (`docker compose logs sentinel1 sentinel2 sentinel3`):
 
 ```
@@ -365,7 +419,11 @@ Log do Sentinel: `+convert-to-slave slave redis-primario:6379 ... @ mymaster <no
 
 ![Antigo primário volta como master, é rebaixado a slave e a limpeza remove tudo](imagens/03-rebaixamento-e-limpeza.png)
 
-**Este é o ponto mais interessante para a turma.** Por cerca de 10 segundos existiram **dois nós se dizendo primário**, situação conhecida como *split-brain*. Um cliente que escrevesse direto no `redis-primario` (porta 6380), sem perguntar ao Sentinel, gravaria num nó desatualizado, e essa escrita seria **apagada** quando ele virasse réplica. Por isso a aplicação deve sempre descobrir o primário pelo Sentinel.
+No Windows, com a versão atual do Compose, o antigo primário já respondeu `slave` na primeira leitura (t=2s). A janela existiu por menos de 2 segundos, curta demais para aparecer em consultas de 2 em 2 segundos. A explicação provável é a tabela de nomes: o Sentinel reconecta ao nó assim que ele volta e o rebaixa em seguida, sem esperar o nome reaparecer no DNS. O risco descrito abaixo continua valendo. O que muda é o tamanho da janela.
+
+![Windows: switch-master nos três Sentinels e antigo primário voltando como slave](imagens/07-windows-switch-master-e-rebaixamento.png)
+
+**Este é o ponto mais interessante para a turma.** No teste em macOS, por cerca de 10 segundos existiram **dois nós se dizendo primário**, situação conhecida como *split-brain*. Um cliente que escrevesse direto no `redis-primario` (porta 6380), sem perguntar ao Sentinel, gravaria num nó desatualizado, e essa escrita seria **apagada** quando ele virasse réplica. Por isso a aplicação deve sempre descobrir o primário pelo Sentinel.
 
 ### Teste de falha 3: derrubar um Sentinel
 
@@ -380,7 +438,7 @@ Com 2 Sentinels de pé, o quórum (2) ainda é atingido e o failover acontece no
 
 ## 8. Problemas comuns
 
-Problemas tratados na montagem do ambiente. A configuração foi desenhada para evitar cada um deles; a tabela mostra o sintoma, caso alguém altere os arquivos.
+Problemas tratados na montagem do ambiente. A configuração foi desenhada para evitar cada um deles; a tabela mostra o sintoma, caso alguém altere os arquivos. As linhas marcadas com **(Windows)** são erros reais encontrados no teste de 25/11/2026.
 
 | Sintoma | Causa | Correção |
 | --- | --- | --- |
@@ -389,9 +447,22 @@ Problemas tratados na montagem do ambiente. A configuração foi desenhada para 
 | Depois de reiniciar, o Sentinel volta a vigiar o primário antigo | O `sentinel.conf` foi recriado a partir do modelo | O script só gera o arquivo se ele **não existir**. Para recomeçar de verdade, use `docker compose down -v` |
 | O antigo primário volta e fica com `master_link_status:down` | Faltou `--masterauth` no primário original | Já incluído no Compose: todos os nós têm `--masterauth` |
 | `contador.sh` trava por muito tempo durante o failover | O `redis-cli` espera a conexão com um nó que não responde | O script usa `timeout 2` em cada escrita |
-| `exec /usr/local/bin/sentinel-entrypoint.sh: no such file or directory` no Windows | O arquivo `.sh` foi salvo com quebra de linha do Windows (CRLF) | O repositório já força LF (`.gitattributes`). Se editar no Windows, salve como **LF** no VS Code (canto inferior direito) |
+| `exec /usr/local/bin/sentinel-entrypoint.sh: no such file or directory` no Windows | O arquivo `.sh` foi salvo com quebra de linha do Windows (CRLF) | O repositório já força LF (`.gitattributes`). Se editar no Windows, salve como **LF** no VS Code (canto inferior direito). Verificado em 25/11/2026: no clone feito no Windows, `git ls-files --eol` mostrou `i/lf w/lf` nos dois scripts |
+| **(Windows)** O failover não acontece. O contador fica em `ERRO: sem resposta` apontando para o primário parado, e os logs dos Sentinels repetem `Failed to resolve hostname 'redis-primario'` seguido de `+tilt #tilt mode entered` | A consulta DNS pelo nome de um contêiner parado levou de 3 a 4 s para falhar no Docker Desktop do Windows. O Sentinel fica travado durante a consulta, entra em modo TILT (mais de 2 s sem rodar) e não faz failover. No teste, 25 minutos depois o primário ainda era o contêiner parado | Corrigido com IPs fixos e tabela de nomes (`extra_hosts`) no `docker-compose.yml` (seção 5). Para medir o tempo da consulta: `docker compose exec sentinel1 sh -c 'a=$(date +%s); nslookup redis-primario; echo tempo: $(( $(date +%s) - a ))s'` |
+| **(Windows)** `export: O termo "export" não é reconhecido como nome de cmdlet...` | `export` é comando do bash, não do PowerShell | Use `$env:REDISCLI_AUTH="sdtr-lab-2026"` |
+| **(Windows)** `unknown docker command: "compose ps#"` | Ao colar um bloco com comentários, o PowerShell juntou o comando com a linha seguinte | Cole um comando por vez |
+| Linhas `Terminated` no meio da saída do `contador.sh` | O `timeout 2` encerrou um `redis-cli` que não respondeu durante a falha | Comportamento esperado |
+| Horários do `contador.sh` e dos logs 3 horas à frente | Os contêineres usam UTC | Comportamento esperado: 22:37 UTC são 19:37 em Brasília |
 | Fora do Docker, o cliente recebe `redis-replica2` do Sentinel e não consegue conectar | Os nomes dos contêineres só existem na rede Docker, não na sua máquina | Rode clientes **dentro** da rede (`docker compose exec ...`) ou use as portas publicadas (6380 a 6382) diretamente |
 | `bind: address already in use` na porta 6380 ou 26380 | Outro programa está usando a porta | Troque a porta da esquerda em `ports:` no `docker-compose.yml` |
+
+Evidência do problema no Windows, antes da correção. O primário caiu às 22:05:04 e o contador ficou 45 segundos apontando para ele, até ser interrompido:
+
+![Windows sem a correção: contador preso em ERRO apontando para o primário parado](imagens/04-windows-failover-sem-correcao.png)
+
+Os logs dos três Sentinels no mesmo teste, com o par `Failed to resolve hostname` e `+tilt` repetido a cada 6 a 8 segundos:
+
+![Windows sem a correção: Sentinels entrando em modo TILT](imagens/05-windows-tilt-nos-logs.png)
 
 ---
 
